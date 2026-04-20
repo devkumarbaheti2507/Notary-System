@@ -16,6 +16,15 @@
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "hardhat": "^2.22.0"
   },
-  "keywords": ["blockchain", "solidity", "hardhat", "notary", "smart-contract"],
-  "license": "MIT"
+  "keywords": [
+    "blockchain",
+    "solidity",
+    "hardhat",
+    "notary",
+    "smart-contract"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
 }
