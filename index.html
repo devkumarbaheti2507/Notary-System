@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DocNotary — Cross-Chain Document Notary</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a25;
+    --border: #2a2a3a;
+    --accent: #00e5ff;
+    --accent2: #7b2fff;
+    --accent3: #ff6b35;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --success: #00c87a;
+    --error: #ff4757;
+    --warning: #ffa726;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orbs */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(123,47,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 0 2.5rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2.5rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+  }
+
+  .logo h1 {
+    font-family: var(--font-head);
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .logo span {
+    font-family: var(--font-head);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    display: block;
+    margin-top: -2px;
+  }
+
+  .chain-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .chain-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--error);
+    flex-shrink: 0;
+  }
+
+  .chain-dot.connected {
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ─── CONNECT BAR ─── */
+  .connect-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+  }
+
+  .connect-bar input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .connect-bar input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+  }
+
+  .connect-bar input.connected {
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .connect-bar .btn {
+    flex-shrink: 0;
+  }
+
+  .wallet-info {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .wallet-info .addr {
+    color: var(--accent);
+    font-family: var(--font-mono);
+  }
+
+  /* ─── STATS BAR ─── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .stat-card:nth-child(1)::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card:nth-child(2)::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .stat-card:nth-child(3)::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+
+  .stat-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-family: var(--font-head);
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  /* ─── TABS ─── */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.3rem;
+    margin-bottom: 1.5rem;
+    width: fit-content;
+  }
+
+  .tab {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ─── PANELS ─── */
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── CARD ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-title {
+    font-family: var(--font-head);
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .card-title .icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+  }
+
+  .icon-cyan { background: rgba(0,229,255,0.12); }
+  .icon-purple { background: rgba(123,47,255,0.12); }
+  .icon-orange { background: rgba(255,107,53,0.12); }
+
+  /* ─── FORM ELEMENTS ─── */
+  .field { margin-bottom: 1rem; }
+
+  label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.45rem;
+  }
+
+  input[type="text"],
+  input[type="file"],
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+
+  input:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+  }
+
+  textarea { resize: vertical; min-height: 70px; }
+
+  /* File drop zone */
+  .drop-zone {
+    width: 100%;
+    background: var(--surface2);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.04);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+    width: 100%; height: 100%;
+    border: none; padding: 0;
+    background: transparent;
+  }
+
+  .drop-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .drop-text { font-size: 0.85rem; color: var(--muted); }
+  .drop-text strong { color: var(--accent); }
+  .file-name { font-size: 0.8rem; color: var(--success); margin-top: 0.5rem; font-weight: 700; }
+
+  /* Hash display */
+  .hash-display {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    word-break: break-all;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    color: #000;
+    box-shadow: 0 4px 20px rgba(0,229,255,0.2);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 28px rgba(0,229,255,0.35);
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  .btn-danger {
+    background: rgba(255,71,87,0.12);
+    color: var(--error);
+    border: 1px solid rgba(255,71,87,0.3);
+  }
+
+  .btn-danger:hover:not(:disabled) { background: rgba(255,71,87,0.2); }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-full { width: 100%; }
+
+  /* ─── RESULT BOX ─── */
+  .result-box {
+    display: none;
+    margin-top: 1rem;
+    padding: 1.2rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .result-box.success {
+    display: block;
+    background: rgba(0,200,122,0.08);
+    border: 1px solid rgba(0,200,122,0.25);
+    color: var(--success);
+  }
+
+  .result-box.error {
+    display: block;
+    background: rgba(255,71,87,0.08);
+    border: 1px solid rgba(255,71,87,0.25);
+    color: var(--error);
+  }
+
+  .result-box.info {
+    display: block;
+    background: rgba(0,229,255,0.06);
+    border: 1px solid rgba(0,229,255,0.2);
+    color: var(--text);
+  }
+
+  .result-box .kv { display: flex; gap: 0.5rem; }
+  .result-box .k { color: var(--muted); min-width: 110px; }
+  .result-box .v { color: var(--text); word-break: break-all; }
+  .result-box .v.revoked { color: var(--error); }
+  .result-box .v.valid { color: var(--success); }
+
+  /* ─── DOCUMENT LIST ─── */
+  .doc-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .doc-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    transition: border-color 0.2s;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .doc-item:hover { border-color: var(--accent); }
+
+  .doc-meta { flex: 1; min-width: 0; }
+  .doc-name { font-size: 0.85rem; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
+  .doc-hash-mini {
+    font-size: 0.7rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .doc-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .badge-valid { background: rgba(0,200,122,0.12); color: var(--success); border: 1px solid rgba(0,200,122,0.2); }
+  .badge-revoked { background: rgba(255,71,87,0.12); color: var(--error); border: 1px solid rgba(255,71,87,0.2); }
+
+  /* ─── LOADING ─── */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,0,0,0.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed;
+    bottom: 2rem; right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    font-size: 0.82rem;
+    z-index: 1000;
+    display: none;
+    animation: slideUp 0.3s ease;
+    max-width: 350px;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  .toast.show { display: block; }
+  .toast.success { border-color: rgba(0,200,122,0.4); color: var(--success); }
+  .toast.error { border-color: rgba(255,71,87,0.4); color: var(--error); }
+
+  /* ─── FLOW DIAGRAM ─── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    padding: 1rem 0;
+  }
+
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 80px;
+  }
+
+  .flow-circle {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .flow-circle.done { border-color: var(--success); background: rgba(0,200,122,0.1); }
+  .flow-circle.active { border-color: var(--accent); background: rgba(0,229,255,0.1); box-shadow: 0 0 12px rgba(0,229,255,0.3); }
+
+  .flow-label { font-size: 0.65rem; color: var(--muted); text-align: center; max-width: 70px; }
+  .flow-arrow { color: var(--border); font-size: 1.2rem; margin: 0 0.25rem; flex-shrink: 0; padding-bottom: 1.2rem; }
+
+  /* ─── ADDR BOX ─── */
+  .addr-input-wrap {
+    display: flex; gap: 0.5rem;
+  }
+  .addr-input-wrap input { flex: 1; }
+
+  @media (max-width: 640px) {
+    .stats-bar { grid-template-columns: 1fr; }
+    .tabs { flex-wrap: wrap; width: 100%; }
+    .tab { flex: 1; text-align: center; }
+    header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+    .connect-bar { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🔏</div>
+      <div>
+        <h1>DocNotary</h1>
+        <span>Cross-Chain Notary System</span>
+      </div>
+    </div>
+    <div class="chain-badge">
+      <div class="chain-dot" id="chainDot"></div>
+      <span id="networkName">Disconnected</span> &nbsp;·&nbsp; Chain <span id="chainId">—</span>
+    </div>
+  </header>
+
+  <!-- CONTRACT CONNECTION -->
+  <div class="connect-bar">
+    <input type="text" id="contractAddr" placeholder="Paste deployed contract address (0x...)" />
+    <button class="btn btn-primary" id="connectBtn" onclick="connectToContract()">Connect</button>
+  </div>
+  <div class="wallet-info" id="walletInfo" style="display:none;">
+    🔑 Signer: <span class="addr" id="signerAddr"></span>
+  </div>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Total Notarized</div>
+      <div class="stat-value" id="totalDocs">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">My Documents</div>
+      <div class="stat-value" id="myDocs">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Contract Status</div>
+      <div class="stat-value" id="contractStatus" style="font-size:1.1rem; color: var(--error); padding-top:0.35rem;">● Offline</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('notarize', this)">📝 Notarize</button>
+    <button class="tab" onclick="switchTab('verify', this)">🔍 Verify</button>
+    <button class="tab" onclick="switchTab('manage', this)">⚙️ Manage</button>
+    <button class="tab" onclick="switchTab('guide', this)">📖 Guide</button>
+  </div>
+
+  <!-- ─── NOTARIZE PANEL ─── -->
+  <div class="panel active" id="panel-notarize">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-cyan">📁</div>
+        Upload & Notarize Document
+      </div>
+
+      <div class="field">
+        <label>Step 1 — Drop your file to compute its SHA-256 hash</label>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" onchange="handleFile(this)" />
+          <div class="drop-icon">📂</div>
+          <div class="drop-text">Drop any file here or <strong>click to browse</strong></div>
+          <div class="file-name" id="fileName"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Computed SHA-256 Hash (bytes32)</label>
+        <div class="hash-display" id="hashDisplay">— awaiting file —</div>
+      </div>
+
+      <div class="field">
+        <label>Document Metadata / Description (optional)</label>
+        <input type="text" id="metadata" placeholder="e.g. Contract_v2.pdf — signed 2026-04-15" />
+      </div>
+
+      <button class="btn btn-primary btn-full" id="notarizeBtn" onclick="doNotarize()" disabled>
+        🔏 Notarize on Blockchain
+      </button>
+
+      <div class="result-box" id="notarizeResult"></div>
+    </div>
+  </div>
+
+  <!-- ─── VERIFY PANEL ─── -->
+  <div class="panel" id="panel-verify">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-purple">🔍</div>
+        Verify a Document
+      </div>
+
+      <p style="font-size:0.82rem; color:var(--muted); margin-bottom:1rem;">
+        Upload the original file — we compute its hash and check the blockchain.
+        Or paste a hash directly.
+      </p>
+
+      <div class="field">
+        <label>Option A — Upload file to auto-compute hash</label>
+        <div class="drop-zone" style="padding:1.5rem;">
+          <input type="file" id="verifyFile" onchange="handleVerifyFile(this)" />
+          <div class="drop-text">Drop file to verify <strong>or browse</strong></div>
+          <div class="file-name" id="verifyFileName"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Option B — Paste document hash (0x...)</label>
+        <div class="addr-input-wrap">
+          <input type="text" id="verifyHash" placeholder="0xabcdef1234..." oninput="onVerifyHashInput()" />
+          <button class="btn btn-secondary" onclick="doVerify()">Verify</button>
+        </div>
+      </div>
+
+      <div class="result-box" id="verifyResult"></div>
+    </div>
+  </div>
+
+  <!-- ─── MANAGE PANEL ─── -->
+  <div class="panel" id="panel-manage">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-orange">📋</div>
+        My Documents
+      </div>
+      <div class="doc-list" id="docList">
+        <div style="color:var(--muted); font-size:0.82rem; text-align:center; padding:2rem;">
+          Connect to a contract to see your documents.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-purple">🔄</div>
+        Transfer Ownership
+      </div>
+      <div class="field">
+        <label>Document Hash</label>
+        <input type="text" id="transferHash" placeholder="0xabcdef..." />
+      </div>
+      <div class="field">
+        <label>New Owner Address</label>
+        <input type="text" id="transferTo" placeholder="0x1234..." />
+      </div>
+      <button class="btn btn-secondary" onclick="doTransfer()">Transfer Ownership</button>
+      <div class="result-box" id="transferResult"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-orange">🚫</div>
+        Revoke Document
+      </div>
+      <div class="field">
+        <label>Document Hash to Revoke</label>
+        <input type="text" id="revokeHash" placeholder="0xabcdef..." />
+      </div>
+      <button class="btn btn-danger" onclick="doRevoke()">Revoke Document</button>
+      <div class="result-box" id="revokeResult"></div>
+    </div>
+  </div>
+
+  <!-- ─── GUIDE PANEL ─── -->
+  <div class="panel" id="panel-guide">
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-cyan">🗺️</div>
+        Development Flow
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-circle done">⚙️</div>
+          <div class="flow-label">Setup Environment</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle done">✍️</div>
+          <div class="flow-label">Write Contract</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle done">🔨</div>
+          <div class="flow-label">Compile</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle done">🧪</div>
+          <div class="flow-label">Test</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle done">⛓️</div>
+          <div class="flow-label">Start Local Node</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle done">🚀</div>
+          <div class="flow-label">Deploy</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-circle active">🔗</div>
+          <div class="flow-label">Interact</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-cyan">💻</div>
+        Quick Start Commands
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;">
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">1. Install dependencies</div>
+          <div class="hash-display" style="font-size:0.78rem;">npm install</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">2. Compile contract</div>
+          <div class="hash-display" style="font-size:0.78rem;">npx hardhat compile</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">3. Run tests</div>
+          <div class="hash-display" style="font-size:0.78rem;">npx hardhat test</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">4. Start local blockchain (new terminal)</div>
+          <div class="hash-display" style="font-size:0.78rem;">npx hardhat node</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">5. Deploy to local network</div>
+          <div class="hash-display" style="font-size:0.78rem;">npx hardhat run scripts/deploy.js --network localhost</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">6. Open this page & paste contract address</div>
+          <div class="hash-display" style="font-size:0.78rem;">Open index.html in browser → paste contract address → Connect</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon icon-purple">📜</div>
+        Contract ABI — Key Functions
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.6rem;font-size:0.78rem;">
+        <div class="doc-item" style="cursor:default;">
+          <div class="doc-meta">
+            <div class="doc-name">notarizeDocument(bytes32 _docHash, string _metadata)</div>
+            <div class="doc-hash-mini">Register a document hash on-chain. Emits DocumentNotarized event.</div>
+          </div>
+          <div class="doc-badge badge-valid">WRITE</div>
+        </div>
+        <div class="doc-item" style="cursor:default;">
+          <div class="doc-meta">
+            <div class="doc-name">verifyDocument(bytes32 _docHash)</div>
+            <div class="doc-hash-mini">Returns owner, timestamp, metadata, isRevoked, chainId.</div>
+          </div>
+          <div class="doc-badge" style="background:rgba(0,229,255,0.1);color:var(--accent);border:1px solid rgba(0,229,255,0.2);">VIEW</div>
+        </div>
+        <div class="doc-item" style="cursor:default;">
+          <div class="doc-meta">
+            <div class="doc-name">isNotarized(bytes32 _docHash)</div>
+            <div class="doc-hash-mini">Quick boolean check if a document is registered.</div>
+          </div>
+          <div class="doc-badge" style="background:rgba(0,229,255,0.1);color:var(--accent);border:1px solid rgba(0,229,255,0.2);">VIEW</div>
+        </div>
+        <div class="doc-item" style="cursor:default;">
+          <div class="doc-meta">
+            <div class="doc-name">revokeDocument(bytes32 _docHash)</div>
+            <div class="doc-hash-mini">Owner only. Permanently marks document as revoked.</div>
+          </div>
+          <div class="doc-badge badge-revoked">WRITE</div>
+        </div>
+        <div class="doc-item" style="cursor:default;">
+          <div class="doc-meta">
+            <div class="doc-name">transferOwnership(bytes32 _docHash, address _newOwner)</div>
+            <div class="doc-hash-mini">Transfer document ownership to another address.</div>
+          </div>
+          <div class="doc-badge badge-valid">WRITE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- Ethers.js v6 CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+
+<script>
+// ─── Contract ABI (only what we need) ─────────────────────────────────────────
+const CONTRACT_ABI = [
+  "function notarizeDocument(bytes32 _docHash, string _metadata) external",
+  "function verifyDocument(bytes32 _docHash) external view returns (address owner, uint256 timestamp, string metadata, bool isRevoked, uint256 chainId)",
+  "function isNotarized(bytes32 _docHash) external view returns (bool)",
+  "function revokeDocument(bytes32 _docHash) external",
+  "function transferOwnership(bytes32 _docHash, address _newOwner) external",
+  "function getOwnerDocuments(address _owner) external view returns (bytes32[])",
+  "function getOwnerDocumentCount(address _owner) external view returns (uint256)",
+  "function totalDocuments() external view returns (uint256)",
+  "event DocumentNotarized(bytes32 indexed docHash, address indexed owner, uint256 timestamp, string metadata, uint256 chainId)",
+  "event DocumentRevoked(bytes32 indexed docHash, address indexed owner, uint256 timestamp)",
+  "event OwnershipTransferred(bytes32 indexed docHash, address indexed previousOwner, address indexed newOwner, uint256 timestamp)"
+];
+
+// Hardhat default account #0 private key (publicly known — only for local dev)
+const HARDHAT_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const HARDHAT_RPC = "http://127.0.0.1:8545";
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let provider = null;
+let signer   = null;
+let contract = null;
+let currentHash = null;
+let currentFileName = null;
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'manage' && contract) loadMyDocuments();
+}
+
+// ─── Connect to Contract ──────────────────────────────────────────────────────
+async function connectToContract() {
+  const addr = document.getElementById('contractAddr').value.trim();
+  const btn  = document.getElementById('connectBtn');
+
+  if (!addr || !addr.startsWith('0x') || addr.length !== 42) {
+    showToast('Please enter a valid contract address (0x... 42 chars)', 'error');
+    return;
+  }
+
+  btn.innerHTML = '<span class="spinner"></span> Connecting...';
+  btn.disabled = true;
+
+  try {
+    // Connect to Hardhat local node
+    provider = new ethers.JsonRpcProvider(HARDHAT_RPC);
+    signer   = new ethers.Wallet(HARDHAT_PRIVATE_KEY, provider);
+    contract = new ethers.Contract(addr, CONTRACT_ABI, signer);
+
+    // Verify the contract is live by calling totalDocuments
+    const total = await contract.totalDocuments();
+    const network = await provider.getNetwork();
+
+    // Update UI
+    document.getElementById('chainDot').classList.add('connected');
+    document.getElementById('networkName').textContent = network.name === 'unknown' ? 'Hardhat Local' : network.name;
+    document.getElementById('chainId').textContent = Number(network.chainId);
+    document.getElementById('contractAddr').classList.add('connected');
+    document.getElementById('contractAddr').disabled = true;
+    document.getElementById('signerAddr').textContent = signer.address;
+    document.getElementById('walletInfo').style.display = 'flex';
+    document.getElementById('contractStatus').innerHTML = '● Live';
+    document.getElementById('contractStatus').style.color = 'var(--success)';
+
+    btn.innerHTML = '✅ Connected';
+    btn.disabled = true;
+
+    // Load stats
+    await refreshStats();
+
+    showToast('Connected to DocumentNotary contract!', 'success');
+  } catch (err) {
+    console.error(err);
+    btn.innerHTML = 'Connect';
+    btn.disabled = false;
+    contract = null;
+
+    if (err.message && err.message.includes('could not detect network')) {
+      showToast('Cannot reach Hardhat node at localhost:8545. Is it running?', 'error');
+    } else {
+      showToast('Connection failed: ' + (err.reason || err.message || 'Unknown error'), 'error');
+    }
+  }
+}
+
+// ─── Refresh On-Chain Stats ───────────────────────────────────────────────────
+async function refreshStats() {
+  if (!contract) return;
+  try {
+    const total  = await contract.totalDocuments();
+    const myDocs = await contract.getOwnerDocumentCount(signer.address);
+    document.getElementById('totalDocs').textContent = Number(total);
+    document.getElementById('myDocs').textContent = Number(myDocs);
+  } catch (e) {
+    console.error('Stats refresh error:', e);
+  }
+}
+
+// ─── File handling ────────────────────────────────────────────────────────────
+async function sha256(buffer) {
+  const hash = await crypto.subtle.digest('SHA-256', buffer);
+  return '0x' + Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('fileName').textContent = '📄 ' + file.name;
+  document.getElementById('metadata').placeholder = file.name + ' — ' + new Date().toISOString().split('T')[0];
+
+  const buf = await file.arrayBuffer();
+  const hash = await sha256(buf);
+  currentHash = hash;
+  currentFileName = file.name;
+
+  document.getElementById('hashDisplay').textContent = hash;
+  document.getElementById('notarizeBtn').disabled = !contract;
+}
+
+async function handleVerifyFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('verifyFileName').textContent = '📄 ' + file.name;
+  const buf = await file.arrayBuffer();
+  const hash = await sha256(buf);
+  document.getElementById('verifyHash').value = hash;
+  doVerify();
+}
+
+function onVerifyHashInput() {
+  document.getElementById('verifyResult').className = 'result-box';
+}
+
+// ─── Drag & Drop ──────────────────────────────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const dt = e.dataTransfer;
+  if (dt.files.length) {
+    document.getElementById('fileInput').files = dt.files;
+    handleFile(document.getElementById('fileInput'));
+  }
+});
+
+// ─── Notarize (REAL blockchain call) ──────────────────────────────────────────
+async function doNotarize() {
+  if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
+
+  const hash = currentHash;
+  if (!hash) { showToast('Upload a file first!', 'error'); return; }
+
+  const metadata = document.getElementById('metadata').value || currentFileName || 'Untitled';
+  const btn = document.getElementById('notarizeBtn');
+  const result = document.getElementById('notarizeResult');
+
+  btn.innerHTML = '<span class="spinner"></span> Sending transaction...';
+  btn.disabled = true;
+
+  try {
+    const tx = await contract.notarizeDocument(hash, metadata);
+    showResult(result, 'info', '⏳ Transaction sent! Waiting for confirmation...<br/>Tx: ' + tx.hash);
+
+    const receipt = await tx.wait();
+
+    showResult(result, 'success', `
+      <div style="margin-bottom:0.5rem;font-size:0.9rem;">✅ Document Notarized on Blockchain!</div>
+      <div class="kv"><span class="k">Doc Hash</span><span class="v">${hash}</span></div>
+      <div class="kv"><span class="k">Owner</span><span class="v">${signer.address}</span></div>
+      <div class="kv"><span class="k">Tx Hash</span><span class="v">${receipt.hash}</span></div>
+      <div class="kv"><span class="k">Block</span><span class="v">${receipt.blockNumber}</span></div>
+      <div class="kv"><span class="k">Gas Used</span><span class="v">${receipt.gasUsed.toString()}</span></div>
+    `);
+
+    await refreshStats();
+    showToast('Document notarized on-chain!', 'success');
+  } catch (err) {
+    const reason = parseRevertReason(err);
+    showResult(result, 'error', '❌ Transaction failed: ' + reason);
+    showToast('Notarization failed: ' + reason, 'error');
+  } finally {
+    btn.innerHTML = '🔏 Notarize on Blockchain';
+    btn.disabled = false;
+  }
+}
+
+// ─── Verify (REAL blockchain call) ────────────────────────────────────────────
+async function doVerify() {
+  if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
+
+  const hash = document.getElementById('verifyHash').value.trim();
+  const result = document.getElementById('verifyResult');
+
+  if (!hash || !hash.startsWith('0x')) {
+    showResult(result, 'error', '❌ Please enter a valid document hash (0x...).');
+    return;
+  }
+
+  showResult(result, 'info', '🔍 Querying blockchain...');
+
+  try {
+    // First check if it exists
+    const exists = await contract.isNotarized(hash);
+
+    if (!exists) {
+      showResult(result, 'error', `
+        <div>❌ Document NOT found on blockchain.</div>
+        <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted);">
+          Hash: ${hash}<br/>
+          This document has never been notarized, or the hash doesn't match.
+        </div>
+      `);
+      return;
+    }
+
+    // Get full details
+    const [owner, timestamp, metadata, isRevoked, chainId] = await contract.verifyDocument(hash);
+
+    const statusClass = isRevoked ? 'revoked' : 'valid';
+    const statusText  = isRevoked ? '🚫 REVOKED' : '✅ VALID';
+
+    showResult(result, 'info', `
+      <div style="margin-bottom:0.75rem;font-size:0.9rem;">🔍 Document Found on Blockchain</div>
+      <div class="kv"><span class="k">Status</span><span class="v ${statusClass}">${statusText}</span></div>
+      <div class="kv"><span class="k">Doc Hash</span><span class="v">${hash}</span></div>
+      <div class="kv"><span class="k">Owner</span><span class="v">${owner}</span></div>
+      <div class="kv"><span class="k">Notarized</span><span class="v">${new Date(Number(timestamp) * 1000).toISOString()}</span></div>
+      <div class="kv"><span class="k">Metadata</span><span class="v">${metadata}</span></div>
+      <div class="kv"><span class="k">Chain ID</span><span class="v">${Number(chainId)} (${Number(chainId) === 31337 ? 'Hardhat Local' : 'Network ' + Number(chainId)})</span></div>
+    `);
+  } catch (err) {
+    const reason = parseRevertReason(err);
+    showResult(result, 'error', '❌ Verification failed: ' + reason);
+  }
+}
+
+// ─── Revoke (REAL blockchain call) ────────────────────────────────────────────
+async function doRevoke() {
+  if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
+
+  const hash = document.getElementById('revokeHash').value.trim();
+  const result = document.getElementById('revokeResult');
+
+  if (!hash || !hash.startsWith('0x')) {
+    showResult(result, 'error', '❌ Enter a valid document hash.');
+    return;
+  }
+
+  showResult(result, 'info', '⏳ Sending revocation transaction...');
+
+  try {
+    const tx = await contract.revokeDocument(hash);
+    await tx.wait();
+
+    showResult(result, 'success', `✅ Document revoked successfully on-chain!<br/>Hash: ${hash}<br/>Tx: ${tx.hash}`);
+    showToast('Document revoked on-chain!', 'success');
+    if (document.getElementById('panel-manage').classList.contains('active')) {
+      await loadMyDocuments();
+    }
+  } catch (err) {
+    const reason = parseRevertReason(err);
+    showResult(result, 'error', '❌ Revocation failed: ' + reason);
+    showToast('Revocation failed: ' + reason, 'error');
+  }
+}
+
+// ─── Transfer (REAL blockchain call) ──────────────────────────────────────────
+async function doTransfer() {
+  if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
+
+  const hash = document.getElementById('transferHash').value.trim();
+  const to   = document.getElementById('transferTo').value.trim();
+  const result = document.getElementById('transferResult');
+
+  if (!hash || !to) {
+    showResult(result, 'error', '❌ Fill in both fields.');
+    return;
+  }
+
+  if (!to.startsWith('0x') || to.length !== 42) {
+    showResult(result, 'error', '❌ Invalid new owner address.');
+    return;
+  }
+
+  showResult(result, 'info', '⏳ Sending transfer transaction...');
+
+  try {
+    const tx = await contract.transferOwnership(hash, to);
+    await tx.wait();
+
+    showResult(result, 'success', `
+      ✅ Ownership transferred on-chain!<br/>
+      From: ${signer.address}<br/>
+      To: ${to}<br/>
+      Hash: ${hash}<br/>
+      Tx: ${tx.hash}
+    `);
+    showToast('Ownership transferred!', 'success');
+    await refreshStats();
+    if (document.getElementById('panel-manage').classList.contains('active')) {
+      await loadMyDocuments();
+    }
+  } catch (err) {
+    const reason = parseRevertReason(err);
+    showResult(result, 'error', '❌ Transfer failed: ' + reason);
+    showToast('Transfer failed: ' + reason, 'error');
+  }
+}
+
+// ─── Load My Documents from Chain ─────────────────────────────────────────────
+async function loadMyDocuments() {
+  if (!contract) return;
+  const list = document.getElementById('docList');
+
+  try {
+    const hashes = await contract.getOwnerDocuments(signer.address);
+
+    if (hashes.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;text-align:center;padding:2rem;">No documents notarized yet. Go to the <strong>Notarize</strong> tab to get started.</div>';
+      return;
+    }
+
+    let html = '';
+    for (const hash of hashes) {
+      try {
+        const [owner, timestamp, metadata, isRevoked, chainId] = await contract.verifyDocument(hash);
+        const displayName = metadata || 'Untitled Document';
+        html += `
+          <div class="doc-item">
+            <div class="doc-meta">
+              <div class="doc-name">📄 ${displayName}</div>
+              <div class="doc-hash-mini">${hash}</div>
+            </div>
+            <div class="doc-badge ${isRevoked ? 'badge-revoked' : 'badge-valid'}">
+              ${isRevoked ? 'REVOKED' : 'VALID'}
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        // Document might have been transferred away — still show hash
+        html += `
+          <div class="doc-item">
+            <div class="doc-meta">
+              <div class="doc-name">📄 Document</div>
+              <div class="doc-hash-mini">${hash}</div>
+            </div>
+            <div class="doc-badge" style="background:rgba(255,167,38,0.12);color:var(--warning);border:1px solid rgba(255,167,38,0.2);">TRANSFERRED</div>
+          </div>
+        `;
+      }
+    }
+    list.innerHTML = html;
+  } catch (e) {
+    console.error('Load docs error:', e);
+    list.innerHTML = '<div style="color:var(--error);font-size:0.82rem;text-align:center;padding:2rem;">Failed to load documents.</div>';
+  }
+}
+
+// ─── Parse Solidity Revert Reasons ────────────────────────────────────────────
+function parseRevertReason(err) {
+  // ethers v6 puts the reason in different places
+  if (err.reason) return err.reason;
+  if (err.revert && err.revert.args && err.revert.args[0]) return err.revert.args[0];
+  if (err.message) {
+    // Try to extract revert reason from the error message
+    const match = err.message.match(/reverted with reason string '([^']+)'/);
+    if (match) return match[1];
+    const match2 = err.message.match(/reason="([^"]+)"/);
+    if (match2) return match2[1];
+    // Shorten long messages
+    if (err.message.length > 120) return err.message.substring(0, 120) + '...';
+    return err.message;
+  }
+  return 'Unknown error';
+}
+
+// ─── UI Helpers ───────────────────────────────────────────────────────────────
+function showResult(el, type, html) {
+  el.className = 'result-box ' + type;
+  el.innerHTML = html;
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3500);
+}
+</script>
+</body>
+</html>
