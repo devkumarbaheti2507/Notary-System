@@ -942,9 +942,40 @@ async function connectToContract() {
   btn.disabled = true;
 
   try {
-    // Connect to Hardhat local node
-    provider = new ethers.JsonRpcProvider(HARDHAT_RPC);
-    signer   = new ethers.Wallet(HARDHAT_PRIVATE_KEY, provider);
+    // Connect via MetaMask (Browser Wallet)
+    if (typeof window.ethereum === 'undefined') {
+      throw new Error("MetaMask (or a Web3 wallet) is not installed. Please install it to use this app.");
+    }
+    
+    // Request account access from the user
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+    // Force MetaMask to switch to Hardhat Local Network (Chain ID 31337 / 0x7a69)
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x7a69' }], 
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        const currentHost = window.location.hostname || '127.0.0.1';
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x7a69',
+            chainName: 'Hardhat Local (' + currentHost + ')',
+            rpcUrls: ['http://' + currentHost + ':8545'],
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
+          }],
+        });
+      } else {
+        throw switchError;
+      }
+    }
+    
+    // Setup Ethers v6 with BrowserProvider
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
     contract = new ethers.Contract(addr, CONTRACT_ABI, signer);
 
     // Verify the contract is live by calling totalDocuments
