@@ -1029,8 +1029,8 @@ async function refreshStats() {
 
 // ─── File handling ────────────────────────────────────────────────────────────
 async function sha256(buffer) {
-  const hash = await crypto.subtle.digest('SHA-256', buffer);
-  return '0x' + Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+  // Use ethers.js sha256 instead of Web Crypto API so it works over HTTP IPs
+  return ethers.sha256(new Uint8Array(buffer));
 }
 
 async function handleFile(input) {
