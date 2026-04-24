@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -13,22 +14,22 @@ module.exports = {
   },
 
   networks: {
-    // Local Hardhat node (default for testing)
+    // Local Hardhat node
     localhost: {
       url: "http://127.0.0.1:8545",
     },
 
-    // Sepolia testnet (add your own RPC URL & private key via .env)
-    // sepolia: {
-    //   url: process.env.SEPOLIA_RPC_URL || "",
-    //   accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-    // },
+    // Sepolia testnet (Ethereum)
+    sepolia: {
+      url: process.env.SEPOLIA_RPC_URL || "",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
 
-    // Polygon Mumbai testnet
-    // mumbai: {
-    //   url: process.env.MUMBAI_RPC_URL || "",
-    //   accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-    // },
+    // Amoy testnet (Polygon)
+    amoy: {
+      url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
   },
 
   // Gas reporting (optional, set REPORT_GAS=true env var)

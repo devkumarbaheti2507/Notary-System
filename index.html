@@ -919,6 +919,17 @@ let contract = null;
 let currentHash = null;
 let currentFileName = null;
 
+// On Load: Check for contract address in URL
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const contractAddr = urlParams.get('contract');
+  if (contractAddr && contractAddr.startsWith('0x') && contractAddr.length === 42) {
+    document.getElementById('contractAddr').value = contractAddr;
+    // Auto-connect if possible (don't force, let user click)
+    showToast('Contract address loaded from URL', 'success');
+  }
+});
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 function switchTab(id, btn) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -934,7 +945,7 @@ async function connectToContract() {
   const btn  = document.getElementById('connectBtn');
 
   if (!addr || !addr.startsWith('0x') || addr.length !== 42) {
-    showToast('Please enter a valid contract address (0x... 42 chars)', 'error');
+    showToast('Please enter a valid contract address (0x...)', 'error');
     return;
   }
 
@@ -944,47 +955,35 @@ async function connectToContract() {
   try {
     // Connect via MetaMask (Browser Wallet)
     if (typeof window.ethereum === 'undefined') {
-      throw new Error("MetaMask (or a Web3 wallet) is not installed. Please install it to use this app.");
+      throw new Error("Web3 wallet (like MetaMask) not found. Please install it.");
     }
     
-    // Request account access from the user
+    // Request account access
     await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-    // Force MetaMask to switch to Hardhat Local Network (Chain ID 31337 / 0x7a69)
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x7a69' }], 
-      });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        const currentHost = window.location.hostname || '127.0.0.1';
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x7a69',
-            chainName: 'Hardhat Local (' + currentHost + ')',
-            rpcUrls: ['http://' + currentHost + ':8545'],
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
-          }],
-        });
-      } else {
-        throw switchError;
-      }
-    }
-    
     // Setup Ethers v6 with BrowserProvider
     provider = new ethers.BrowserProvider(window.ethereum);
     signer   = await provider.getSigner();
     contract = new ethers.Contract(addr, CONTRACT_ABI, signer);
 
-    // Verify the contract is live by calling totalDocuments
+    // Verify the contract is live
     const total = await contract.totalDocuments();
     const network = await provider.getNetwork();
 
+    // Map common chain IDs to names
+    const chainNames = {
+      1: 'Ethereum Mainnet',
+      11155111: 'Sepolia Testnet',
+      80002: 'Polygon Amoy',
+      31337: 'Hardhat Local',
+      137: 'Polygon Mainnet'
+    };
+
+    const netName = chainNames[Number(network.chainId)] || network.name || 'Unknown Network';
+
     // Update UI
     document.getElementById('chainDot').classList.add('connected');
-    document.getElementById('networkName').textContent = network.name === 'unknown' ? 'Hardhat Local' : network.name;
+    document.getElementById('networkName').textContent = netName;
     document.getElementById('chainId').textContent = Number(network.chainId);
     document.getElementById('contractAddr').classList.add('connected');
     document.getElementById('contractAddr').disabled = true;
@@ -996,21 +995,20 @@ async function connectToContract() {
     btn.innerHTML = '✅ Connected';
     btn.disabled = true;
 
-    // Load stats
-    await refreshStats();
+    // Save choice in URL for easy sharing (silent update)
+    if (window.location.protocol !== 'file:' && !window.location.search.includes(addr)) {
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?contract=' + addr;
+      window.history.pushState({path:newUrl},'',newUrl);
+    }
 
-    showToast('Connected to DocumentNotary contract!', 'success');
+    await refreshStats();
+    showToast('Connected to Notary contract on ' + netName, 'success');
   } catch (err) {
     console.error(err);
     btn.innerHTML = 'Connect';
     btn.disabled = false;
     contract = null;
-
-    if (err.message && err.message.includes('could not detect network')) {
-      showToast('Cannot reach Hardhat node at localhost:8545. Is it running?', 'error');
-    } else {
-      showToast('Connection failed: ' + (err.reason || err.message || 'Unknown error'), 'error');
-    }
+    showToast('Connection failed: ' + (err.reason || err.message || 'Check network/address'), 'error');
   }
 }
 
