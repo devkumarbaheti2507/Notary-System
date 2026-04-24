@@ -14,7 +14,12 @@ module.exports = {
   },
 
   networks: {
-    // Local Hardhat node
+    // Local Hardhat node — bind to 0.0.0.0 so LAN devices can connect
+    hardhat: {
+      mining: {
+        auto: true,
+      },
+    },
     localhost: {
       url: "http://127.0.0.1:8545",
     },

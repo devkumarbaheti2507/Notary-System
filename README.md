@@ -2,6 +2,11 @@
 
 A blockchain-based document notarization system built with **Solidity** and **Hardhat**, following the concepts taught in the workshop.
 
+### ✨ Key Features
+- **Multi-user LAN access** — Run the blockchain node on your laptop and let friends connect via the same WiFi
+- **Duplicate detection** — The smart contract prevents the same document from being notarized twice
+- **Ownership verification** — Anyone can verify who originally notarized a document
+
 ---
 
 ## 📁 Project Structure
@@ -14,20 +19,22 @@ cross-chain-document-notary/
 │   └── deploy.js               ← Deployment script
 ├── test/
 │   └── DocumentNotary.js       ← Full test suite (15 tests)
-├── index.html                  ← Interactive UI (open in browser)
+├── server.js                   ← LAN HTTP server for frontend
+├── index.html                  ← Interactive UI
 ├── hardhat.config.js
 └── package.json
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Multi-User LAN Setup)
 
-### Step 0 — Prerequisites
+### Prerequisites
 ```bash
 node -v    # LTS version required
 npm -v
 ```
+All devices need **MetaMask** (browser extension) installed.
 
 ### Step 1 — Install Dependencies
 ```bash
@@ -44,39 +51,65 @@ npx hardhat compile
 npx hardhat test
 ```
 
-### Step 4 — Start Local Blockchain (new terminal)
+### Step 4 — Start Blockchain Node on LAN (**Terminal 1**)
 ```bash
-npx hardhat node
+npm run node
 ```
+> This starts the Hardhat node on `0.0.0.0:8545`, making it accessible to all devices on your WiFi/LAN.
 
-### Step 5 — Deploy to Local Network (another terminal)
+### Step 5 — Deploy the Contract (**Terminal 2**)
 ```bash
-npx hardhat run scripts/deploy.js --network localhost
+npm run deploy:local
 ```
+> Save the **contract address** from the output. The deploy script also prints shareable URLs.
 
-### Step 6 — Open Frontend & Connect
-1. Open `index.html` directly in your browser
-2. Copy the deployed contract address from the deploy output
-3. Paste it into the connection field and click **Connect**
-4. The UI is now connected to the real blockchain — notarize, verify, revoke, and transfer documents!
-
-### Step 7 — Interact via Console (optional)
+### Step 6 — Serve Frontend on LAN (**Terminal 3**)
 ```bash
-npx hardhat console --network localhost
+npm run serve
 ```
-```javascript
-const Notary = await ethers.getContractAt("DocumentNotary", "PASTE_ADDRESS_HERE")
+> This starts an HTTP server on port 3000, accessible at `http://YOUR_IP:3000`.
 
-// Notarize a document
-const hash = ethers.keccak256(ethers.toUtf8Bytes("my_document.pdf"))
-await Notary.notarizeDocument(hash, "My Important Document")
+### Step 7 — Share with Friends!
+1. Find your computer's IP address (shown in the `npm run serve` output)
+2. Share this URL with friends on the same WiFi:
+   ```
+   http://192.168.x.x:3000?contract=0x_CONTRACT_ADDRESS_HERE
+   ```
+3. Each friend needs to:
+   - Open the URL in a browser with **MetaMask**
+   - Click **Connect** — MetaMask will auto-add the LAN network
+   - Import one of the Hardhat test accounts (private keys shown in Terminal 1)
 
-// Verify it
-await Notary.verifyDocument(hash)
+---
 
-// Check ownership
-await Notary.isNotarized(hash)
-```
+## 🔒 Duplicate Document Prevention
+
+The smart contract enforces that **each document can only be notarized once**:
+
+1. When a user uploads a file, its **SHA-256 hash** is computed in the browser
+2. Before notarizing, the frontend checks if that hash already exists on-chain
+3. If a duplicate is detected:
+   - The user sees who originally uploaded it and when
+   - The notarization is **denied** (both frontend-side and contract-side)
+4. The contract's `require(documents[_docHash].timestamp == 0, "Document already notarized")` provides a hard guarantee
+
+### What this means:
+- ✅ User A uploads `report.pdf` → Notarized successfully
+- ❌ User B uploads the same `report.pdf` → **Denied** with message showing User A as the original owner
+- ✅ User B uploads a modified `report_v2.pdf` → Notarized (different hash)
+
+---
+
+## 🌐 How Friends Connect (MetaMask Setup)
+
+When friends open the shared URL and click **Connect**, MetaMask will automatically:
+1. Add a custom network called `DocNotary LAN (YOUR_IP)` 
+2. Set the RPC URL to `http://YOUR_IP:8545`
+3. Set Chain ID to `31337`
+
+**To get test ETH for transactions**, friends should import one of the Hardhat accounts:
+- Open MetaMask → Import Account → Paste a private key from the `npm run node` output
+- Each Hardhat account starts with **10,000 ETH** (test currency, no real value)
 
 ---
 
@@ -103,7 +136,7 @@ MUMBAI_RPC_URL=https://polygon-mumbai.infura.io/v3/YOUR_KEY
 PRIVATE_KEY=your_wallet_private_key
 ```
 
-Then uncomment the networks in `hardhat.config.js` and run:
+Then run:
 ```bash
 npx hardhat run scripts/deploy.js --network sepolia
 ```
@@ -112,9 +145,10 @@ npx hardhat run scripts/deploy.js --network sepolia
 
 ## 🖥️ Frontend UI
 
-Open `index.html` directly in your browser. Features:
-- **Live blockchain connection** via ethers.js (connects to Hardhat local node)
+Features:
+- **Live blockchain connection** via ethers.js (auto-detects LAN IP)
 - Drag-and-drop file hashing (SHA-256 in browser)
+- **Duplicate detection** — warns immediately when a file was already notarized
 - Notarize, verify, revoke, and transfer documents on-chain
 - Real-time stats from the deployed contract
 - Visual development flow guide
@@ -129,3 +163,4 @@ Open `index.html` directly in your browser. Features:
 - **Ethers.js v6** — Blockchain interaction (frontend + scripts)
 - **Mocha + Chai** — Testing framework
 - **Vanilla HTML/CSS/JS** — Frontend (no framework needed)
+- **Node.js HTTP Server** — LAN-accessible frontend serving

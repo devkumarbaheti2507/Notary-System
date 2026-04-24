@@ -825,16 +825,20 @@
           <div class="hash-display" style="font-size:0.78rem;">npx hardhat test</div>
         </div>
         <div>
-          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">4. Start local blockchain (new terminal)</div>
-          <div class="hash-display" style="font-size:0.78rem;">npx hardhat node</div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">4. Start local blockchain on LAN (Terminal 1)</div>
+          <div class="hash-display" style="font-size:0.78rem;">npm run node</div>
         </div>
         <div>
-          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">5. Deploy to local network</div>
-          <div class="hash-display" style="font-size:0.78rem;">npx hardhat run scripts/deploy.js --network localhost</div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">5. Deploy to local network (Terminal 2)</div>
+          <div class="hash-display" style="font-size:0.78rem;">npm run deploy:local</div>
         </div>
         <div>
           <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">6. Open this page & paste contract address</div>
-          <div class="hash-display" style="font-size:0.78rem;">Open index.html in browser → paste contract address → Connect</div>
+          <div class="hash-display" style="font-size:0.78rem;">npm run serve</div>
+        </div>
+        <div>
+          <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem;">7. Share URL with friends on same WiFi</div>
+          <div class="hash-display" style="font-size:0.78rem;">http://YOUR_IP:3000?contract=0x...</div>
         </div>
       </div>
     </div>
@@ -908,9 +912,10 @@ const CONTRACT_ABI = [
   "event OwnershipTransferred(bytes32 indexed docHash, address indexed previousOwner, address indexed newOwner, uint256 timestamp)"
 ];
 
-// Hardhat default account #0 private key (publicly known — only for local dev)
-const HARDHAT_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-const HARDHAT_RPC = "http://127.0.0.1:8545";
+// Auto-detect the LAN RPC URL from the current browser hostname
+// If you're on http://192.168.1.5:3000, the Hardhat node is at http://192.168.1.5:8545
+const CURRENT_HOST = window.location.hostname || '127.0.0.1';
+const HARDHAT_RPC = 'http://' + CURRENT_HOST + ':8545';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let provider = null;
@@ -961,6 +966,29 @@ async function connectToContract() {
     // Request account access
     await window.ethereum.request({ method: 'eth_requestAccounts' });
 
+    // Force switch MetaMask to our LAN Hardhat Node
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x7a69' }], // 31337
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        // If they don't have the network, add it pointing to the computer hosting this site!
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x7a69',
+            chainName: 'DocNotary LAN (' + CURRENT_HOST + ')',
+            rpcUrls: [HARDHAT_RPC],
+            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
+          }],
+        });
+      } else {
+        throw switchError;
+      }
+    }
+
     // Setup Ethers v6 with BrowserProvider
     provider = new ethers.BrowserProvider(window.ethereum);
     signer   = await provider.getSigner();
@@ -970,16 +998,7 @@ async function connectToContract() {
     const total = await contract.totalDocuments();
     const network = await provider.getNetwork();
 
-    // Map common chain IDs to names
-    const chainNames = {
-      1: 'Ethereum Mainnet',
-      11155111: 'Sepolia Testnet',
-      80002: 'Polygon Amoy',
-      31337: 'Hardhat Local',
-      137: 'Polygon Mainnet'
-    };
-
-    const netName = chainNames[Number(network.chainId)] || network.name || 'Unknown Network';
+    const netName = 'Local LAN Network';
 
     // Update UI
     document.getElementById('chainDot').classList.add('connected');
@@ -1050,6 +1069,33 @@ async function handleFile(input) {
 
   document.getElementById('hashDisplay').textContent = hash;
   document.getElementById('notarizeBtn').disabled = !contract;
+
+  // Auto-check if this document already exists on-chain
+  if (contract) {
+    try {
+      const exists = await contract.isNotarized(hash);
+      if (exists) {
+        const [origOwner, origTimestamp, origMeta, isRevoked] = await contract.verifyDocument(hash);
+        const origDate = new Date(Number(origTimestamp) * 1000);
+        const isSameUser = signer && origOwner.toLowerCase() === signer.address.toLowerCase();
+        const result = document.getElementById('notarizeResult');
+        showResult(result, 'error', `
+          <div style="margin-bottom:0.5rem;font-size:0.9rem;">⚠️ This document already exists on-chain!</div>
+          <div class="kv"><span class="k">Owner</span><span class="v">${origOwner}${isSameUser ? ' (You)' : ''}</span></div>
+          <div class="kv"><span class="k">Notarized</span><span class="v">${origDate.toLocaleString()}</span></div>
+          <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--warning);">
+            Uploading this file again will be denied by the blockchain.
+          </div>
+        `);
+        showToast('⚠️ This file is already notarized!', 'error');
+      } else {
+        // Clear any previous warning
+        document.getElementById('notarizeResult').className = 'result-box';
+      }
+    } catch (e) {
+      // Ignore — will be caught during actual notarization
+    }
+  }
 }
 
 async function handleVerifyFile(input) {
@@ -1079,7 +1125,7 @@ dz.addEventListener('drop', e => {
   }
 });
 
-// ─── Notarize (REAL blockchain call) ──────────────────────────────────────────
+// ─── Notarize (REAL blockchain call) — with DUPLICATE detection ───────────────
 async function doNotarize() {
   if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
 
@@ -1090,10 +1136,44 @@ async function doNotarize() {
   const btn = document.getElementById('notarizeBtn');
   const result = document.getElementById('notarizeResult');
 
-  btn.innerHTML = '<span class="spinner"></span> Sending transaction...';
+  btn.innerHTML = '<span class="spinner"></span> Checking for duplicates...';
   btn.disabled = true;
 
   try {
+    // ── PRE-CHECK: Is this document already notarized? ──
+    const alreadyExists = await contract.isNotarized(hash);
+
+    if (alreadyExists) {
+      // Get details of who uploaded it originally
+      const [origOwner, origTimestamp, origMeta, isRevoked] = await contract.verifyDocument(hash);
+      const origDate = new Date(Number(origTimestamp) * 1000);
+      const isSameUser = origOwner.toLowerCase() === signer.address.toLowerCase();
+
+      showResult(result, 'error', `
+        <div style="margin-bottom:0.75rem;font-size:0.95rem;">🚫 Duplicate Document Detected!</div>
+        <div style="margin-bottom:0.75rem;font-size:0.82rem;color:var(--muted);">
+          This exact document has already been notarized on the blockchain.
+          ${isSameUser ? 'You uploaded this document before.' : 'Another user uploaded this document.'}
+        </div>
+        <div class="kv"><span class="k">Doc Hash</span><span class="v">${hash}</span></div>
+        <div class="kv"><span class="k">Original Owner</span><span class="v">${origOwner}${isSameUser ? ' (You)' : ''}</span></div>
+        <div class="kv"><span class="k">Notarized On</span><span class="v">${origDate.toLocaleString()}</span></div>
+        <div class="kv"><span class="k">Metadata</span><span class="v">${origMeta || '—'}</span></div>
+        <div class="kv"><span class="k">Status</span><span class="v ${isRevoked ? 'revoked' : 'valid'}">${isRevoked ? '🚫 REVOKED' : '✅ VALID'}</span></div>
+        <div style="margin-top:0.75rem;padding:0.75rem;background:rgba(255,71,87,0.06);border-radius:8px;font-size:0.78rem;color:var(--warning);">
+          ⚠️ Each document can only be notarized once. The blockchain already has a permanent record of this file.
+        </div>
+      `);
+
+      showToast('Duplicate! This document was already notarized.', 'error');
+      btn.innerHTML = '🔏 Notarize on Blockchain';
+      btn.disabled = false;
+      return;
+    }
+
+    // ── Not a duplicate — proceed with notarization ──
+    btn.innerHTML = '<span class="spinner"></span> Sending transaction...';
+
     const tx = await contract.notarizeDocument(hash, metadata);
     showResult(result, 'info', '⏳ Transaction sent! Waiting for confirmation...<br/>Tx: ' + tx.hash);
 
@@ -1112,8 +1192,14 @@ async function doNotarize() {
     showToast('Document notarized on-chain!', 'success');
   } catch (err) {
     const reason = parseRevertReason(err);
-    showResult(result, 'error', '❌ Transaction failed: ' + reason);
-    showToast('Notarization failed: ' + reason, 'error');
+    // Double-check if it's a duplicate error from the contract itself
+    if (reason.includes('already notarized')) {
+      showResult(result, 'error', '🚫 This document has already been notarized by another user. Duplicate uploads are not allowed.');
+      showToast('Duplicate document — upload denied!', 'error');
+    } else {
+      showResult(result, 'error', '❌ Transaction failed: ' + reason);
+      showToast('Notarization failed: ' + reason, 'error');
+    }
   } finally {
     btn.innerHTML = '🔏 Notarize on Blockchain';
     btn.disabled = false;

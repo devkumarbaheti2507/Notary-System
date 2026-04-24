@@ -1,0 +1,4 @@
+const deployer = "0xAd0496A45ecC3B3F10b506f383fac3fec54Ba7B2";const count = await ethers.provider.getTransactionCount(deployer);for(let i=0; i<count; i++) { const a = ethers.getCreateAddress({from: deployer, nonce: i}); const c = await ethers.provider.getCode(a); if(c !== '0x') console.log("YOUR CORRECT CONTRACT ADDRESS IS:", a); }
+for(let i=0; i<countdeployer, nonce: i}); const c = await ethers.provider.getCode(a); if(c !== '0x') console.log("YOUR CORRECT CONTRACT ADDRESS IS:", a); }
+const count = await ethers.provider.getTransactionCount(deployer);
+const deployer = "0xAd0496A45ecC3B3F10b506f383fac3fec54Ba7B2";

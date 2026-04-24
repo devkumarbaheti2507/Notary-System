@@ -1,4 +1,18 @@
 const hre = require("hardhat");
+const os = require("os");
+
+function getLanIPs() {
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        ips.push({ name, address: iface.address });
+      }
+    }
+  }
+  return ips;
+}
 
 async function main() {
   console.log("\n🔗  Cross-Chain Document Notary System");
@@ -45,6 +59,20 @@ async function main() {
   console.log("🎉  Deployment complete!\n");
   console.log("   Save this contract address:");
   console.log("   ", address);
+  
+  // Show LAN access info
+  const lanIPs = getLanIPs();
+  if (lanIPs.length > 0) {
+    console.log("\n   📱 Share with friends on your LAN:");
+    lanIPs.forEach(ip => {
+      console.log(`   → http://${ip.address}:3000?contract=${address}`);
+    });
+    console.log("\n   They need MetaMask with a Custom RPC pointing to:");
+    lanIPs.forEach(ip => {
+      console.log(`   → http://${ip.address}:8545  (Chain ID: 31337)`);
+    });
+  }
+
   console.log("\n   To interact via console:");
   console.log('   npx hardhat console --network localhost');
   console.log('   > const n = await ethers.getContractAt("DocumentNotary", "' + address + '")');
@@ -55,3 +83,4 @@ main().catch((error) => {
   console.error("❌  Deployment failed:", error);
   process.exitCode = 1;
 });
+
