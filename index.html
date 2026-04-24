@@ -1008,7 +1008,13 @@ async function connectToContract() {
     btn.innerHTML = 'Connect';
     btn.disabled = false;
     contract = null;
-    showToast('Connection failed: ' + (err.reason || err.message || 'Check network/address'), 'error');
+    
+    // Provide a super clear message for the BAD_DATA / 0x error
+    if (err.code === 'BAD_DATA' && err.message.includes('value="0x"')) {
+       showToast('❌ Contract not found! Are you sure your MetaMask is connected to Sepolia? (Check your wallet network limit)', 'error');
+    } else {
+       showToast('Connection failed: ' + (err.reason || err.message || 'Check network/address'), 'error');
+    }
   }
 }
 
