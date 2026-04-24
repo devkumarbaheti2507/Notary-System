@@ -75,15 +75,25 @@ contract DocumentNotary {
 
     /**
      * @dev Notarize a document by storing its hash on-chain.
+     *      Revoked documents CAN be re-notarized (by anyone).
      * @param _docHash  SHA-256 hash of the document (bytes32)
      * @param _metadata Optional description / filename string
      */
     function notarizeDocument(bytes32 _docHash, string memory _metadata) external {
         require(_docHash != bytes32(0), "Invalid document hash");
-        require(documents[_docHash].timestamp == 0, "Document already notarized");
+        // Allow if: never notarized OR was revoked
+        require(
+            documents[_docHash].timestamp == 0 || documents[_docHash].isRevoked,
+            "Document already notarized"
+        );
 
         uint256 currentChainId;
         assembly { currentChainId := chainid() }
+
+        // Only increment total if this is a brand new document (not a re-notarization)
+        if (documents[_docHash].timestamp == 0) {
+            totalDocuments++;
+        }
 
         documents[_docHash] = Document({
             docHash:   _docHash,
@@ -95,7 +105,6 @@ contract DocumentNotary {
         });
 
         ownerDocuments[msg.sender].push(_docHash);
-        totalDocuments++;
 
         emit DocumentNotarized(_docHash, msg.sender, block.timestamp, _metadata, currentChainId);
     }
