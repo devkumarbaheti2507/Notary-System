@@ -16,12 +16,13 @@ module.exports = {
   networks: {
     // Local Hardhat node — bind to 0.0.0.0 so LAN devices can connect
     hardhat: {
+      chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID) : 31337,
       mining: {
         auto: true,
       },
     },
     localhost: {
-      url: "http://127.0.0.1:8545",
+      url: process.env.LOCAL_RPC || "http://127.0.0.1:8545",
     },
 
     // Sepolia testnet (Ethereum)

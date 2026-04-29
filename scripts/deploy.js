@@ -77,6 +77,31 @@ async function main() {
   console.log('   npx hardhat console --network localhost');
   console.log('   > const n = await ethers.getContractAt("DocumentNotary", "' + address + '")');
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+  // ─── AUTO-UPDATE INDEX.HTML ───────────────────────────────────────────────
+  const fs = require("fs");
+  const path = require("path");
+  const indexPath = path.join(__dirname, "../index.html");
+  
+  if (fs.existsSync(indexPath)) {
+    let indexContent = fs.readFileSync(indexPath, "utf8");
+
+    if (network.name === "localhost" || network.name === "hardhat") {
+      indexContent = indexContent.replace(
+        /(name:\s*'Hardhat Local',[\s\S]*?contractAddr:\s*')[^']*(')/,
+        `$1${address}$2`
+      );
+      console.log("📝 Auto-updated Local Contract Address inside index.html!");
+    } else if (network.name === "sepolia") {
+      indexContent = indexContent.replace(
+        /(name:\s*'Sepolia Testnet',[\s\S]*?contractAddr:\s*')[^']*(')/,
+        `$1${address}$2`
+      );
+      console.log("📝 Auto-updated Sepolia Contract Address inside index.html!");
+    }
+    
+    fs.writeFileSync(indexPath, indexContent);
+  }
 }
 
 main().catch((error) => {

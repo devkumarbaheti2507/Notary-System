@@ -917,6 +917,21 @@ const CONTRACT_ABI = [
 const CURRENT_HOST = window.location.hostname || '127.0.0.1';
 const HARDHAT_RPC = 'http://' + CURRENT_HOST + ':8545';
 
+// ─── Cross-Chain Registry ─────────────────────────────────────────────────────
+// Define all the blockchains your system is actively monitoring
+const CROSS_CHAIN_REGISTRY = [
+  {
+    name: 'Hardhat Local',
+    rpcUrl: HARDHAT_RPC,
+    contractAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+  },
+  {
+    name: 'Simulated Cross-Chain Network (Port 8546)',
+    rpcUrl: 'http://127.0.0.1:8546',
+    contractAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3' // <--- WE WILL DEPLOY AND PASTE THE 2ND NODE ADDRESS HERE
+  }
+];
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let provider = null;
 let signer   = null;
@@ -966,33 +981,9 @@ async function connectToContract() {
     // Request account access
     await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-    // Force switch MetaMask to our LAN Hardhat Node
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x7a69' }], // 31337
-      });
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        // If they don't have the network, add it pointing to the computer hosting this site!
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x7a69',
-            chainName: 'DocNotary LAN (' + CURRENT_HOST + ')',
-            rpcUrls: [HARDHAT_RPC],
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
-          }],
-        });
-      } else {
-        throw switchError;
-      }
-    }
-
-    // Setup Ethers v6 with BrowserProvider — use STATIC network to prevent
-    // "network changed" errors when MetaMask briefly reports a different chain
-    const hardhatNetwork = ethers.Network.from(31337);
-    provider = new ethers.BrowserProvider(window.ethereum, hardhatNetwork);
+    // Let MetaMask use whatever network the user has currently selected!
+    // We remove the hardcoded switch to 31337 so you can test Sepolia too.
+    provider = new ethers.BrowserProvider(window.ethereum);
     signer   = await provider.getSigner();
     contract = new ethers.Contract(addr, CONTRACT_ABI, signer);
 
@@ -1004,7 +995,9 @@ async function connectToContract() {
     const total = await contract.totalDocuments();
     const network = await provider.getNetwork();
 
-    const netName = 'Local LAN Network';
+    let netName = 'Unknown Network';
+    if (Number(network.chainId) === 31337) netName = 'Local LAN Network';
+    if (Number(network.chainId) === 11155111) netName = 'Sepolia Testnet';
 
     // Update UI
     document.getElementById('chainDot').classList.add('connected');
@@ -1143,6 +1136,36 @@ dz.addEventListener('drop', e => {
   }
 });
 
+// ─── Cross-Chain Global Check Helper ──────────────────────────────────────────
+async function checkGlobalCrossChain(hash) {
+  // We check the currently connected contract first
+  if (contract) {
+    try {
+      const exists = await contract.isNotarized(hash);
+      if (exists) {
+        const network = await provider.getNetwork();
+        return { found: true, networkName: 'Currently Connected Network', contractAddr: await contract.getAddress() };
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Then we check all registered cross-chain networks using read-only providers
+  for (const net of CROSS_CHAIN_REGISTRY) {
+    if (!net.contractAddr || net.contractAddr === '') continue; // Skip if user hasn't configured it
+    try {
+      const readProvider = new ethers.JsonRpcProvider(net.rpcUrl);
+      const readContract = new ethers.Contract(net.contractAddr, CONTRACT_ABI, readProvider);
+      const exists = await readContract.isNotarized(hash);
+      if (exists) {
+        return { found: true, networkName: net.name, contractAddr: net.contractAddr, readContract };
+      }
+    } catch (e) {
+      console.warn(`Failed to check cross-chain on ${net.name}:`, e);
+    }
+  }
+  return { found: false };
+}
+
 // ─── Notarize (REAL blockchain call) — with DUPLICATE detection ───────────────
 async function doNotarize() {
   if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
@@ -1158,47 +1181,35 @@ async function doNotarize() {
   btn.disabled = true;
 
   try {
-    // ── PRE-CHECK: Is this document already notarized? ──
-    const alreadyExists = await contract.isNotarized(hash);
+    // ── PRE-CHECK: Is this document already notarized anywhere? ──
+    const globalCheck = await checkGlobalCrossChain(hash);
 
-    if (alreadyExists) {
-      // Get details of who uploaded it originally
-      const [origOwner, origTimestamp, origMeta, isRevoked] = await contract.verifyDocument(hash);
-      const origDate = new Date(Number(origTimestamp) * 1000);
-      const isSameUser = origOwner.toLowerCase() === signer.address.toLowerCase();
+    if (globalCheck.found) {
+      // Determine if we can get owner info
+      let origOwner = "Unknown", origDate = "Unknown";
+      let targetContract = contract;
+      if (globalCheck.readContract) targetContract = globalCheck.readContract;
+      
+      try {
+        const [o, ts] = await targetContract.verifyDocument(hash);
+        origOwner = o;
+        origDate = new Date(Number(ts) * 1000).toLocaleString();
+      } catch (e) {}
 
-      // If document was REVOKED, allow re-notarization
-      if (isRevoked) {
-        showResult(result, 'info', `
-          <div style="margin-bottom:0.5rem;font-size:0.9rem;">🔄 This document was previously revoked — re-notarizing...</div>
-          <div class="kv"><span class="k">Previous Owner</span><span class="v">${origOwner}</span></div>
-          <div class="kv"><span class="k">Revoked Doc</span><span class="v">${hash}</span></div>
-        `);
-        // Don't block — fall through to the notarization below
-      } else {
-        // Document is ACTIVE — block the duplicate
-        showResult(result, 'error', `
-          <div style="margin-bottom:0.75rem;font-size:0.95rem;">🚫 Duplicate Document Detected!</div>
-          <div style="margin-bottom:0.75rem;font-size:0.82rem;color:var(--muted);">
-            This exact document has already been notarized on the blockchain.
-            ${isSameUser ? 'You uploaded this document before.' : 'Another user uploaded this document.'}
-          </div>
-          <div class="kv"><span class="k">Doc Hash</span><span class="v">${hash}</span></div>
-          <div class="kv"><span class="k">Original Owner</span><span class="v">${origOwner}${isSameUser ? ' (You)' : ''}</span></div>
-          <div class="kv"><span class="k">Notarized On</span><span class="v">${origDate.toLocaleString()}</span></div>
-          <div class="kv"><span class="k">Metadata</span><span class="v">${origMeta || '—'}</span></div>
-          <div class="kv"><span class="k">Status</span><span class="v valid">✅ VALID</span></div>
-          <div style="margin-top:0.75rem;padding:0.75rem;background:rgba(255,71,87,0.06);border-radius:8px;font-size:0.78rem;color:var(--warning);">
-            ⚠️ Each document can only be notarized once. The blockchain already has a permanent record of this file.
-          </div>
-        `);
-
-        showToast('Duplicate! This document was already notarized.', 'error');
-        btn.innerHTML = '🔏 Notarize on Blockchain';
-        btn.disabled = false;
-        return;
-      }
+      showResult(result, 'error', `
+        <div style="margin-bottom:0.5rem;font-size:0.9rem;">⛔ CROSS-CHAIN COLLISION DETECTED</div>
+        This document has already been notarized on another blockchain!<br/><br/>
+        <b>Network:</b> ${globalCheck.networkName}<br/>
+        <b>Original Owner:</b> ${origOwner}<br/>
+        <b>Notarized On:</b> ${origDate}<br/><br/>
+        <i>Upload blocked to preserve global uniqueness.</i>
+      `);
+      showToast('Blocked: Document already exists globally.', 'error');
+      btn.innerHTML = '🔏 Notarize on Blockchain';
+      btn.disabled = false;
+      return;
     }
+
 
     // ── Not a duplicate — proceed with notarization ──
     btn.innerHTML = '<span class="spinner"></span> Sending transaction...';
@@ -1237,8 +1248,6 @@ async function doNotarize() {
 
 // ─── Verify (REAL blockchain call) ────────────────────────────────────────────
 async function doVerify() {
-  if (!contract) { showToast('Connect to a contract first!', 'error'); return; }
-
   const hash = document.getElementById('verifyHash').value.trim();
   const result = document.getElementById('verifyResult');
 
@@ -1247,41 +1256,50 @@ async function doVerify() {
     return;
   }
 
-  showResult(result, 'info', '🔍 Querying blockchain...');
+  showResult(result, 'info', '🔍 Initiating Global Cross-Chain Query...');
 
   try {
-    // First check if it exists
-    const exists = await contract.isNotarized(hash);
+    const globalCheck = await checkGlobalCrossChain(hash);
 
-    if (!exists) {
+    if (!globalCheck.found) {
       showResult(result, 'error', `
-        <div>❌ Document NOT found on blockchain.</div>
+        <div>❌ Document NOT found on any registered blockchain.</div>
         <div style="margin-top:0.5rem;font-size:0.75rem;color:var(--muted);">
           Hash: ${hash}<br/>
-          This document has never been notarized, or the hash doesn't match.
+          This document has never been notarized, or the hash doesn't match the original file.
         </div>
       `);
       return;
     }
 
-    // Get full details
-    const [owner, timestamp, metadata, isRevoked, chainId] = await contract.verifyDocument(hash);
+    // Determine which contract to query for full details
+    let targetContract = contract; // Default to connected contract
+    if (globalCheck.readContract) {
+      targetContract = globalCheck.readContract; // Use the specific network contract if found there
+    } else if (!contract) {
+       showResult(result, 'error', '❌ Connect wallet to view full details.');
+       return;
+    }
+
+    // Get full details from the specific chain
+    const [owner, timestamp, metadata, isRevoked, chainId] = await targetContract.verifyDocument(hash);
 
     const statusClass = isRevoked ? 'revoked' : 'valid';
     const statusText  = isRevoked ? '🚫 REVOKED' : '✅ VALID';
 
-    showResult(result, 'info', `
-      <div style="margin-bottom:0.75rem;font-size:0.9rem;">🔍 Document Found on Blockchain</div>
+    showResult(result, 'success', `
+      <div style="margin-bottom:0.75rem;font-size:0.9rem;">🌐 Document Found via Cross-Chain Scan</div>
+      <div class="kv"><span class="k">Found On</span><span class="v" style="color:var(--accent); font-weight:bold;">${globalCheck.networkName}</span></div>
       <div class="kv"><span class="k">Status</span><span class="v ${statusClass}">${statusText}</span></div>
       <div class="kv"><span class="k">Doc Hash</span><span class="v">${hash}</span></div>
       <div class="kv"><span class="k">Owner</span><span class="v">${owner}</span></div>
       <div class="kv"><span class="k">Notarized</span><span class="v">${new Date(Number(timestamp) * 1000).toISOString()}</span></div>
       <div class="kv"><span class="k">Metadata</span><span class="v">${metadata}</span></div>
-      <div class="kv"><span class="k">Chain ID</span><span class="v">${Number(chainId)} (${Number(chainId) === 31337 ? 'Hardhat Local' : 'Network ' + Number(chainId)})</span></div>
+      <div class="kv"><span class="k">Chain ID</span><span class="v">${Number(chainId)}</span></div>
     `);
   } catch (err) {
     const reason = parseRevertReason(err);
-    showResult(result, 'error', '❌ Verification failed: ' + reason);
+    showResult(result, 'error', '❌ Cross-Chain Verification failed: ' + reason);
   }
 }
 
