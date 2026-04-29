@@ -926,9 +926,9 @@ const CROSS_CHAIN_REGISTRY = [
     contractAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
   },
   {
-    name: 'Simulated Cross-Chain Network (Port 8546)',
+    name: 'Sepolia Testnet',
     rpcUrl: 'http://127.0.0.1:8546',
-    contractAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3' // <--- WE WILL DEPLOY AND PASTE THE 2ND NODE ADDRESS HERE
+    contractAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3' 
   }
 ];
 
@@ -997,7 +997,8 @@ async function connectToContract() {
 
     let netName = 'Unknown Network';
     if (Number(network.chainId) === 31337) netName = 'Local LAN Network';
-    if (Number(network.chainId) === 11155111) netName = 'Sepolia Testnet';
+    if (Number(network.chainId) === 11155111) netName = 'Real Sepolia Testnet';
+    if (Number(network.chainId) === 31338) netName = 'Simulated Sepolia';
 
     // Update UI
     document.getElementById('chainDot').classList.add('connected');
